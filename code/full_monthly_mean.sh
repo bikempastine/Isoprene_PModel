@@ -37,7 +37,7 @@ function month_averager {
         then
             echo "sucsessful averaging, monthly mean found!"
         else
-            echo "something went wrong! More than 1 time point returned. Loop ended"
+            echo "Error: More than 1 time point returned. Loop ended"
             break  #break the for loop
         fi
 
@@ -64,3 +64,7 @@ cdo -addc,-273.15 ../results/Tair_2005.nc ../results/Tair_2005_C.nc
 
 # display info about the Celcius result
 cdo -info ../results/Tair_2005_C.nc
+
+cdo -info ../results/Tair_2005.nc
+
+
