@@ -1,0 +1,132 @@
+"""
+The isoprene model, getting and saving critical variables
+"""
+# Load in the required packages
+import math
+import netCDF4
+import numpy as np
+from matplotlib import pyplot as plt
+import pandas as pd
+import datetime
+from dateutil.relativedelta import relativedelta
+import sys
+import gc
+
+gc.collect() #garbage collection
+
+## DEFINE VARIABLES
+INDEX = int(sys.argv[1])
+#INDEX = 69
+START_DATE = datetime.datetime(2005, 1, 1)
+REFERANCE_TEMP = 30 #reference temperature to run the IspS_function at
+INPUT_FILE = "/rds/general/user/bp222/home/full_averaged/Pmodel_data.nc"
+OUTPUT_FILE = "/rds/general/user/bp222/home/Iso_results/Iso_results_month_" + str(INDEX)+".nc"
+
+# Load the functions for J, Jv, IspS
+import isoprene_functions as Iso_fun
+
+# Load in the pyrealm package
+from pyrealm import pmodel
+from pyrealm import hygro
+
+# Load the  dataset containing the input variables.
+ds = netCDF4.Dataset(INPUT_FILE)
+ds.set_auto_mask(True)
+
+# Extract the six variables for all months
+temp = ds["Tair"][:] #Celcius
+ppfd = ds["SWdown"][:] 
+elev = ds["Elev"][:]
+vap = ds["vap"][:]
+co2 = ds["CO2"][:]
+fapar_wrong = ds["FPAR"][:] # this needs to be reshaped as there is an issue with the longitudes
+ds.close()
+
+# Get VPD from VAP
+vpd = hygro.convert_vp_to_vpd(vap*0.1 , temp) #vap in hPa, convert to hPA 
+
+# Fix the fapar longitude problem
+halfway = np.shape(fapar_wrong)[2]//2
+first_half = fapar_wrong[:,:,:halfway]
+second_half = fapar_wrong[:,:,halfway:]
+fapar = np.concatenate((second_half,first_half), axis=2)
+fapar[fapar > 1] = np.nan #fapar is a fraction
+
+# Manipulation of the inputs to fit the assumptions of the pmodel
+patm = pmodel.calc_patm(elev) # Convert elevation into  atmospheric pressure
+temp[temp < -25] = np.nan # Remove temperature values below -25 degrees
+vpd[vpd < 0] = 0 #Clip Vapour pressure defficit so that VPD below zero is set to zero
+
+# Run the PModel for the index defined above
+env = pmodel.PModelEnvironment(tc=temp[INDEX,:,:], co2 = co2[INDEX,:,:], patm=patm[INDEX,:,:], vpd=vpd[INDEX,:,:], )
+model = pmodel.PModel(env, method_jmaxlim = 'smith19') #run with smith19 to be consistent with J calculation
+model.estimate_productivity(fapar[INDEX,:,:], ppfd[INDEX,:,:])
+
+# Get the nessisary variables for J and Jv
+gammastar = env.gammastar
+ci = model.optchi.ci
+vcmax = model.vcmax
+kmm = env.kmm
+a_j = (model.vcmax / model.optchi.mjoc) * model.optchi.mj #getting ths from the code pyrealm/pyrealm/pmodel/pmodel.py  line 613 and 595
+
+# Get J and Jv
+J = Iso_fun.find_J(a_j, ci, gammastar)
+Jv = Iso_fun.find_Jv(vcmax, ci, gammastar, kmm)
+
+# Run the IspS function
+IspS = np.vectorize(Iso_fun.IspS_function)(temp[INDEX,:,:], REFERANCE_TEMP)
+
+# Produce objects that will be stored
+GPP = model.gpp
+Jmax = model.jmax
+LUE = model.lue
+Vcmax = model.vcmax
+
+J_times_IspS_umol = J*IspS
+
+
+# Save these variables to a new netcdf file along with the rest of the variables
+input_dataset= netCDF4.Dataset(INPUT_FILE, "r") # Open the input NetCDF file
+output_dataset = netCDF4.Dataset(OUTPUT_FILE, "w")
+
+dims_to_keep = ['lon', 'lat']  # from the original file we want to keep these dimensions
+
+# Copy all dimensions from the input dataset to the output dataset
+for dim_name, dim in input_dataset.dimensions.items():
+    if dim_name in dims_to_keep:
+        output_dataset.createDimension(dim_name, len(dim))
+
+# Create the time dimension with a length of 1
+output_dataset.createDimension("time", size=1)
+
+# Copy variables from input dataset to output dataset
+for var_name, var in input_dataset.variables.items():
+    if var_name in dims_to_keep:
+        output_var = output_dataset.createVariable(var_name, var.dtype, var.dimensions)
+        output_var[:] = var[:]
+
+input_dataset.close()
+
+# Create the time variable
+time_var = output_dataset.createVariable("time", np.float64, ("time",))
+time_var.units = "months since 2005-01-01" #change manually based on start date
+time_var.calendar = "360_day" #assuming 30 day months so we can go month by month"
+
+# Get the current date based on the INDEX value
+time_value = START_DATE + relativedelta(months = INDEX)
+time_numeric = netCDF4.date2num(time_value, units=time_var.units, calendar=time_var.calendar)
+
+# Asign the value
+time_var[:] = time_numeric
+
+# Create and assign data to variables in the output file
+output_dataset.createVariable("gpp", "float64", ("time", "lat", "lon"))[:] = GPP
+output_dataset.createVariable("jmax", "float64", ("time", "lat", "lon"))[:] = Jmax
+output_dataset.createVariable("lue", "float64", ("time", "lat", "lon"))[:] = LUE
+output_dataset.createVariable("vcmax", "float64", ("time", "lat", "lon"))[:] = Vcmax
+output_dataset.createVariable("J_times_IspS", "float64", ("time", "lat", "lon"))[:] = J_times_IspS_umol
+output_dataset.createVariable("J", "float64", ("time", "lat", "lon"))[:] = J
+output_dataset.createVariable("Jv", "float64", ("time", "lat", "lon"))[:] = Jv
+
+output_dataset.close()
+ 
