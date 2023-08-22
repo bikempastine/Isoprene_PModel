@@ -56,15 +56,15 @@ function month_averager {
 }
 
 
-# Run the function on the folder "Tair_2005"
-month_averager "Tair_2005"
+# # Run the function on the folder "Tair_2005"
+# month_averager "Tair_2005"
 
-#convert from K to C
-cdo -addc,-273.15 ../results/Tair_2005.nc ../results/Tair_2005_C.nc
+# #convert from K to C
+# cdo -addc,-273.15 ../results/Tair_2005.nc ../results/Tair_2005_C.nc
 
-# display info about the Celcius result
-cdo -info ../results/Tair_2005_C.nc
+# # display info about the Celcius result
+# cdo -info ../results/Tair_2005_C.nc
 
-cdo -info ../results/Tair_2005.nc
+# cdo -info ../results/Tair_2005.nc
 
 

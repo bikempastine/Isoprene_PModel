@@ -1,0 +1,17 @@
+#!/bin/sh
+
+#PBS -lwalltime=01:00:00​
+
+#PBS -lselect=1:ncpus=1:mem=1gb​
+
+# List of folders to process
+folders=("2005" "2006" "2007" "2008" "2009" "2010" "2011" "2012" "2013" "2014" "2015" "2016")
+
+echo "Start submssion"​
+
+# Submit job for each folder
+for folder in "${folders[@]}"; do
+    qsub -N job_${folder} -o ${folder}.out -e ${folder}.err monthly_mean_script.sh ${folder}
+done
+
+echo "Script complete"​
