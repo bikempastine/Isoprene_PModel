@@ -8,7 +8,7 @@ The **code** folder contains all of the code used in my analysis, including scri
 
 ### Data
 
-The **data** folder contains all of the raw data used in my analysis, as well as intermediate datasets generated during the analysis. However, for storage purposes this folder is ignored in github. You can acsess the datasets here (insert the link to all of the data) 
+The **data** folder contains all of the raw data used in my analysis, as well as intermediate datasets generated during the analysis. However, for storage purposes this folder is ignored in github. You can acsess the datasets here (https://doi.org/10.5281/zenodo.8265993)
 
 ### Results
 
